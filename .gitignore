@@ -1,0 +1,11 @@
+*
+!*/
+!.gitignore
+!flake.lock
+!*.nix
+!cabal.project
+!wai-csrf/LICENSE
+!wai-csrf/*.cabal
+!wai-csrf/*.md
+!wai-csrf/**/*.hs
+
