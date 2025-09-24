@@ -137,21 +137,31 @@ data Config = Config
    -- 'middleware'.
    , headerName :: B.ByteString
    -- ^ Used by 'tokenFromRequestHeader' and 'middleware'.
-   , reject :: Wai.Request -> Maybe (Token, Bool) -> Maybe Wai.Response
-   -- ^ Used by 'middleware'. Decide whether the incoming 'Wai.Request' should
-   -- be rejected with a given 'Wai.Response'. Takes the 'Token' that came in
-   -- through a cookie (see 'Config'\'s @cookieName@), if any, as well as a
-   -- 'Bool' which is 'True' if there is a matching 'Token' that came in
-   -- through a header (see 'Config'\'s @headerName@).
+   , reject
+      :: Token
+      -> Maybe Token
+      -> Wai.Request
+      -> (Wai.Response -> IO Wai.ResponseReceived)
+      -> Maybe (IO Wai.ResponseReceived)
+   -- ^ Used by 'middleware'. This function is called if either there is no
+   -- 'Token' in the expected request header (see 'Config'\'s @headerName@), or
+   -- if there is a 'Token' in said header, but it is different from the
+   -- 'Token' that came through a request cookie (see 'Config'\'s
+   -- @cookieName@).
    --
-   -- If the token comes through the request body (see 'MaskedToken'), then
-   -- it is sometimes best not to reject the request here, and instead check
-   -- and potentially reject the request downstream, so as to preserve the
-   -- streaming nature of processing the request body.
+   -- If this function produces 'Nothing', then the underlying
+   -- 'Wai.Application' will be executed normally, if 'Just', then the
+   -- 'Wai.Response' (which should probably have status 'H.forbidden403'), will
+   -- be returned immediately.
    --
-   -- Notice that nothing in @'Maybe' ('Token', 'Bool')@ has been evaluated
-   -- by the time @reject@ is called, so unless you force their evaluation,
-   -- using 'middleware' is essentially free.
+   -- The 'Token' parameter is the one that came through the cookie, and the
+   -- @'Maybe' 'Token'@ parameter is the one that came through the header, if
+   -- any.
+   --
+   -- Notice that if the token comes through the request body (see
+   -- 'MaskedToken'), then it is sometimes best not to reject the request here,
+   -- and instead check and potentially reject the request downstream, so as to
+   -- preserve the streaming nature of processing the request body.
    }
 
 -- | Default CSRF settings.
@@ -168,15 +178,17 @@ defaultConfig =
    Config
       { cookieName = "CSRF-TOKEN"
       , headerName = "X-CSRF-TOKEN"
-      , reject = \req yteq ->
-         if
-            | Wai.requestMethod req == H.methodGet -> Nothing
-            | Wai.requestMethod req == H.methodHead -> Nothing
-            | Wai.requestMethod req == H.methodOptions -> Nothing
-            | Wai.requestMethod req == H.methodTrace -> Nothing
-            | Just (_, eq) <- yteq, eq -> Nothing
-            | otherwise -> Just $ Wai.responseLBS H.forbidden403 [] "CSRF"
+      , reject = \_ct yht req respond -> case yht of
+         Nothing | isGHOT req -> Nothing
+         _ -> Just $ respond $ Wai.responseLBS H.forbidden403 [] "CSRF"
       }
+  where
+   isGHOT :: Wai.Request -> Bool
+   isGHOT req =
+      Wai.requestMethod req == H.methodGet
+         || Wai.requestMethod req == H.methodHead
+         || Wai.requestMethod req == H.methodOptions
+         || Wai.requestMethod req == H.methodTrace
 
 -- | Obtain the 'Token' from the 'Wai.Request' headers.
 --
@@ -244,10 +256,14 @@ expireCookie c =
 -- | Construct a 'Wai.Middleware' (almost) that does the following:
 --
 -- 1. Try to find the CSRF 'Token' among the incoming 'Wai.Request' cookies
--- (see 'Config'\'s @cookieName@).
+-- (see 'Config'\'s @cookieName@), and headers
+-- (see 'Config'\'s @headerName@).
 --
--- 2. Use 'Config'\'s @reject@ to decide if the incoming 'Wai.Request'
--- should be rejected.
+-- 2. Accept requests where there is no 'Token' in the cookies, or where
+-- there is a 'Token' in both the cookie and the header and they are equal.
+--
+-- 3. If the request wasn't readily accepted, use 'Config'\'s @reject@ to
+-- decide if the incoming 'Wai.Request' should be rejected.
 --
 -- 3. If the 'Wai.Request' wasn't rejected, we pass the 'Token' found in the
 -- cookie, if any, to the underlying 'Wai.Application'.
@@ -260,10 +276,16 @@ middleware
    -> Wai.Application
 middleware c = \fapp req respond -> do
    let yct = fyct req
-       yte = liftA2 (\ct ht -> (ct, ct == ht)) yct (fyht req)
-   case c.reject req yte of
-      Nothing -> fapp yct req respond
-      Just res -> respond res
+       yht = fyht req
+       accept = fapp yct req respond
+   case yct of
+      Nothing -> accept
+      Just ct | yrej <- c.reject ct yht req respond ->
+         case yht of
+            Nothing -> maybe accept id yrej
+            Just ht
+               | ct == ht -> accept
+               | otherwise -> maybe accept id yrej
   where
    fyct = tokenFromRequestCookie c
    fyht = tokenFromRequestHeader c
