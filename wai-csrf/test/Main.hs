@@ -60,7 +60,7 @@ testReject = do
       WT.assertStatus 200 sres3
       WT.assertBody "True" sres3
 
-      -- Request succeeds because it is GET. There is no matching request header,
+      -- Request succeeds because it is GET. The request header doesn't match,
       -- but it doesn't matter.
       sres4 <- do
          WT.request
