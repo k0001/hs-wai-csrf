@@ -19,7 +19,7 @@ module Wai.CSRF
    , MaskedToken (..)
    , maskedTokenToBase64UU
    , maskedTokenFromBase64UU
-   , maskToken
+   , randomMaskToken
    , unmaskToken
    ) where
 
@@ -73,7 +73,7 @@ tokenFromBase64UU b =
 -- | If you embed a 'Token' as is in a response body when HTTP body compression
 -- is enabled, it is possible for a malicious actor to recover the 'Token'
 -- through a /BREACH/ attack or similar. In order to prevent that, send a
--- different 'MaskedToken' (generated with 'randomMaskedToken') each time
+-- different 'MaskedToken' (generated with 'randomMaskToken') each time
 -- instead.
 newtype MaskedToken = MaskedToken (BAS.SizedByteArray 64 BA.Bytes)
 
@@ -115,12 +115,12 @@ instance Eq Mask where
 randomMask :: (C.MonadRandom m) => m Mask
 randomMask = fmap (Mask . BAS.unsafeSizedByteArray) (C.getRandomBytes 32)
 
--- | @'fromMaskedToken' '<$>' 'randomMaskedToken' tok@ and @'pure' tok@ produce
+-- | @'unmaskToken' '<$>' 'randomMaskToken' tok@ and @'pure' tok@ produce
 -- the same output @tok@.
-maskToken :: (C.MonadRandom m) => Token -> m MaskedToken
-maskToken t = flip toMaskedToken t <$> randomMask
+randomMaskToken :: (C.MonadRandom m) => Token -> m MaskedToken
+randomMaskToken t = flip toMaskedToken t <$> randomMask
 
--- | @'fromMaskedToken' '<$>' 'randomMaskedToken' tok@ and @'pure' tok@ produce
+-- | @'unmaskToken' '<$>' 'randomMaskToken' tok@ and @'pure' tok@ produce
 -- the same output @tok@.
 unmaskToken :: MaskedToken -> Token
 unmaskToken = snd . fromMaskedToken

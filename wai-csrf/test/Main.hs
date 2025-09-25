@@ -86,8 +86,8 @@ testToken = do
    t1 <- WCC.randomToken
    when (t0 == t1) $ fail "e0"
 
-   mt0 <- WCC.maskToken t0
-   mt1 <- WCC.maskToken t0
+   mt0 <- WCC.randomMaskToken t0
+   mt1 <- WCC.randomMaskToken t0
    when (mt0 == mt1) $ fail "e1"
 
    when (WCC.unmaskToken mt0 /= t0) $ fail "e3"
