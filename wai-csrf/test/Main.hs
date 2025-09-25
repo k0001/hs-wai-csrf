@@ -60,14 +60,15 @@ testReject = do
       WT.assertStatus 200 sres3
       WT.assertBody "True" sres3
 
-      -- Request fails there the request header doensn't match, even if GET.
+      -- Request succeeds because it is GET. There is no matching request header,
+      -- but it doesn't matter.
       sres4 <- do
          WT.request
             WT.defaultRequest
                { W.requestHeaders = [("X-CSRF-TOKEN", WC.setCookieValue sc2)]
                }
-      WT.assertStatus 403 sres4
-      WT.assertBody "CSRF" sres4
+      WT.assertStatus 200 sres4
+      WT.assertBody "True" sres4
 
       -- Request fails because it is POST, but there is no matching request header
       sres5 <- do
