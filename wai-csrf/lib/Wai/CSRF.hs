@@ -23,6 +23,7 @@ module Wai.CSRF
    , unmaskToken
    ) where
 
+import Control.Applicative (liftA2)
 import Crypto.Random qualified as C
 import Data.ByteArray qualified as BA
 import Data.ByteArray.Encoding qualified as BA
