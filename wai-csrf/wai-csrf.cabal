@@ -42,7 +42,6 @@ library
     case-insensitive,
     cookie,
     crypton,
-    http-types,
     ram,
     time,
     wai,
@@ -55,6 +54,8 @@ test-suite test
   ghc-options: -threaded -with-rtsopts=-N
   build-depends:
     bytestring,
+    case-insensitive,
+    containers,
     cookie,
     http-types,
     wai,

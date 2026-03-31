@@ -6,6 +6,9 @@
 
 * Use `__Host-CSRF-TOKEN` as default cookie name.
 
+* Remove the `reject` field from `Config`.
+
+* Add `tokenFromRequest`.
 
 # Version 0.1
 

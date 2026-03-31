@@ -1,8 +1,12 @@
 -- | This module exports tool to prevent cross-site request forgeries in
 -- "Network.Wai". Consider using it in combination with "Wai.CryptoCookie".
+--
+-- Mostly, you will want to us the 'tokenFromRequest' function, 'setCookie' and
+-- 'expireCookie' functions.
 module Wai.CSRF
    ( Config (..)
    , defaultConfig
+   , tokenFromRequest
    , tokenFromRequestHeader
    , tokenFromRequestCookie
    , setCookie
@@ -23,7 +27,6 @@ module Wai.CSRF
    , unmaskToken
    ) where
 
-import Control.Applicative (liftA2)
 import Crypto.Random qualified as C
 import Data.ByteArray qualified as BA
 import Data.ByteArray.Encoding qualified as BA
@@ -31,7 +34,6 @@ import Data.ByteArray.Sized qualified as BAS
 import Data.ByteString qualified as B
 import Data.CaseInsensitive qualified as CI
 import Data.Time.Clock.POSIX qualified as Time
-import Network.HTTP.Types qualified as H
 import Network.Wai qualified as Wai
 import Web.Cookie qualified as C
 
@@ -138,21 +140,6 @@ data Config = Config
    -- 'middleware'.
    , headerName :: B.ByteString
    -- ^ Used by 'tokenFromRequestHeader' and 'middleware'.
-   , reject :: Wai.Request -> Maybe (Token, Bool) -> Maybe Wai.Response
-   -- ^ Used by 'middleware'. Decide whether the incoming 'Wai.Request' should
-   -- be rejected with a given 'Wai.Response'. Takes the 'Token' that came in
-   -- through a cookie (see 'Config'\'s @cookieName@), if any, as well as a
-   -- 'Bool' which is 'True' if there is a matching 'Token' that came in
-   -- through a header (see 'Config'\'s @headerName@).
-   --
-   -- If the token comes through the request body (see 'MaskedToken'), then
-   -- it is sometimes best not to reject the request here, and instead check
-   -- and potentially reject the request downstream, so as to preserve the
-   -- streaming nature of processing the request body.
-   --
-   -- Notice that nothing in @'Maybe' ('Token', 'Bool')@ has been evaluated
-   -- by the time @reject@ is called, so unless you force their evaluation,
-   -- using 'middleware' is essentially free.
    }
 
 -- | Default CSRF settings.
@@ -160,28 +147,19 @@ data Config = Config
 -- * Cookie name is @__Host-CSRF-TOKEN@.
 --
 -- * Header name is @X-CSRF-TOKEN@.
---
--- * Reject with 'H.forbidden403' all request who are neither @GET@, @HEAD@,
--- @OPTIONS@ nor @TRACE@, unless the 'Token' is present in both cookie and
--- header and they are equal.
 defaultConfig :: Config
 defaultConfig =
    Config
       { cookieName = "__Host-CSRF-TOKEN"
       , headerName = "X-CSRF-TOKEN"
-      , reject = \req yteq ->
-         if
-            | Wai.requestMethod req == H.methodGet -> Nothing
-            | Wai.requestMethod req == H.methodHead -> Nothing
-            | Wai.requestMethod req == H.methodOptions -> Nothing
-            | Wai.requestMethod req == H.methodTrace -> Nothing
-            | Just (_, eq) <- yteq, eq -> Nothing
-            | otherwise -> Just $ Wai.responseLBS H.forbidden403 [] "CSRF"
       }
 
 -- | Obtain the 'Token' from the 'Wai.Request' headers.
 --
--- You don't need to use this if you are using 'middleware'.
+-- You probably don't need this function. Use 'tokenFromRequest' instead.
+--
+-- Warning: Do not rely on this 'Token' unless it is equal to the one returned
+-- by 'tokenFromRequestCookie'.
 tokenFromRequestHeader :: Config -> Wai.Request -> Maybe Token
 tokenFromRequestHeader c = \r -> do
    [t64] <- pure $ lookupMany n $ Wai.requestHeaders r
@@ -191,11 +169,20 @@ tokenFromRequestHeader c = \r -> do
 
 -- | Obtain the 'Token' from the 'Wai.Request' cookies.
 --
--- You don't need to use this if you are using 'middleware'.
+-- You probably don't need this function. Use 'tokenFromRequest' instead.
 tokenFromRequestCookie :: Config -> Wai.Request -> Maybe Token
 tokenFromRequestCookie c r = do
    [t64] <- pure $ lookupMany c.cookieName $ requestCookies r
    tokenFromBase64UU t64
+
+-- | Obtain the 'Token' that came in through a cookie (see 'Config'\'s
+-- @cookieName@), if any, as well as a 'Bool' which is 'True' if there is a
+-- matching 'Token' that came in through a header (see 'Config'\'s
+-- @headerName@).
+tokenFromRequest :: Config -> Wai.Request -> Maybe (Token, Bool)
+tokenFromRequest c = \req -> do
+   ct <- tokenFromRequestCookie c req
+   pure (ct, Just ct == tokenFromRequestHeader c req)
 
 -- | Construct a 'C.SetCookie' to set the CSRF 'Token'.
 --
@@ -242,32 +229,29 @@ expireCookie c =
       , C.setCookieSecure = True
       }
 
--- | Construct a 'Wai.Middleware' (almost) that does the following:
+-- | Construct a 'Wai.Middleware' (almost) that passes the result
+-- of 'tokenFromRequest' to an 'Wai.Application'.
 --
--- 1. Try to find the CSRF 'Token' among the incoming 'Wai.Request' cookies
--- (see 'Config'\'s @cookieName@).
---
--- 2. Use 'Config'\'s @reject@ to decide if the incoming 'Wai.Request'
--- should be rejected.
---
--- 3. If the 'Wai.Request' wasn't rejected, we pass the 'Token' found in the
--- cookie, if any, to the underlying 'Wai.Application'.
+-- Note: Most often, you'll end up wanting to use 'tokenFromRequest'.
 --
 -- Important: This doesn't set any cookie. You must explicitly add
 -- 'setCookie' to a 'Wai.Response' yourself.
 middleware
    :: Config
    -> (Maybe Token -> Wai.Application)
+   -- ^ Takes the 'Token' that came in through a cookie (see 'Config'\'s
+   -- @cookieName@), if any, if there is also a matching 'Token' that came in
+   -- through a header (see 'Config'\'s @headerName@).
+   --
+   -- For any logic more complicated than this, use 'tokenFromRequest'.
+   --
+   -- Notice that the @'Maybe' ('Token', 'Bool')@ is not evaluated by this
+   -- 'middleware' function, so unless you force its evaluation, using
+   -- 'middleware' is essentially free.
    -> Wai.Application
-middleware c = \fapp req respond -> do
-   let yct = fyct req
-       yte = liftA2 (\ct ht -> (ct, ct == ht)) yct (fyht req)
-   case c.reject req yte of
-      Nothing -> fapp yct req respond
-      Just res -> respond res
-  where
-   fyct = tokenFromRequestCookie c
-   fyht = tokenFromRequestHeader c
+middleware c fapp req = flip fapp req $ case tokenFromRequest c req of
+   Just (tok, True) -> Just tok
+   _ -> Nothing
 
 --------------------------------------------------------------------------------
 
