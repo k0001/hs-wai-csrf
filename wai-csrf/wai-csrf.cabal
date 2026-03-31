@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name: wai-csrf
-version: 0.1.1
+version: 0.2
 license: Apache-2.0
 license-file: LICENSE
 extra-source-files: README.md CHANGELOG.md
@@ -13,7 +13,7 @@ synopsis: Cross-site request forgery protection for WAI
 description: Cross-site request forgery protection for WAI
 homepage: https://github.com/k0001/hs-wai-csrf
 bug-reports: https://github.com/k0001/hs-wai-csrf/issues
-tested-with: GHC == 9.8.1
+tested-with: GHC == 9.12.2
 
 common basic
   default-language: GHC2021
@@ -43,7 +43,7 @@ library
     cookie,
     crypton,
     http-types,
-    memory,
+    ram,
     time,
     wai,
 
