@@ -157,7 +157,7 @@ data Config = Config
 
 -- | Default CSRF settings.
 --
--- * Cookie name is @CSRF-TOKEN@.
+-- * Cookie name is @__Host-CSRF-TOKEN@.
 --
 -- * Header name is @X-CSRF-TOKEN@.
 --
@@ -167,7 +167,7 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
    Config
-      { cookieName = "CSRF-TOKEN"
+      { cookieName = "__Host-CSRF-TOKEN"
       , headerName = "X-CSRF-TOKEN"
       , reject = \req yteq ->
          if

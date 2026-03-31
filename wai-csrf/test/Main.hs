@@ -25,25 +25,26 @@ main = do
 testReject :: IO ()
 testReject = do
    tok1 <- WCC.randomToken
-   let sc1 = WCC.setCookie WCC.defaultConfig tok1
-       app = WCC.middleware WCC.defaultConfig \yt _ respond ->
+   let c = WCC.defaultConfig
+       sc1 = WCC.setCookie c tok1
+       app = WCC.middleware c \yt _ respond ->
          respond $
             W.responseLBS HT.status200 [] $
                fromString (show (yt == Just tok1))
 
    tok2 <- WCC.randomToken
-   let sc2 = WCC.setCookie WCC.defaultConfig tok2
+   let sc2 = WCC.setCookie c tok2
 
    WT.withSession app do
       -- Make sure the cookie is set
-      WT.assertNoClientCookieExists "t0-a" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t0-a" c.cookieName
       WT.setClientCookie sc1
 
       -- Request succeeds because it is GET
       sres1 <- WT.request WT.defaultRequest
       WT.assertStatus 200 sres1
       WT.assertBody "True" sres1
-      WT.assertClientCookieExists "t0-b" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t0-b" c.cookieName
 
       -- Request fails because it is POST and there is no CSRF header
       sres2 <- WT.request WT.defaultRequest{W.requestMethod = HT.methodPost}
@@ -104,48 +105,48 @@ testCookies = do
 
    -- keeping cookies untouched
    WT.withSession (fapp1 \_ -> Nothing) do
-      WT.assertNoClientCookieExists "t0-a" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t0-a" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres1
-      WT.assertNoClientCookieExists "t0-b" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t0-b" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres1
-      WT.assertNoClientCookieExists "t0-c" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t0-c" c.cookieName
 
    -- explicitly deleting cookie
    WT.withSession (fapp1 \_ -> Just Nothing) do
-      WT.assertNoClientCookieExists "t1-a" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t1-a" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres1
-      WT.assertClientCookieExists "t1-b" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t1-b" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres1
-      WT.assertClientCookieExists "t1-c" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t1-c" c.cookieName
 
    -- explicitely setting cookie
    tok1 <- WCC.randomToken
    ck0 <- WT.withSession (fapp1 \_ -> Just (Just tok1)) do
-      WT.assertNoClientCookieExists "t2-a" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t2-a" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres1
-      WT.assertClientCookieExists "t2-b" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t2-b" c.cookieName
       sres2 <- WT.request WT.defaultRequest
       WT.assertBody (fromString (show (Just tok1))) sres2
-      WT.assertClientCookieExists "t2-c" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t2-c" c.cookieName
       WT.getClientCookies
 
    -- modify and explicitly delete
    WT.withSession (fapp1 \_ -> Just Nothing) do
-      WT.assertNoClientCookieExists "t3-a" "CSRF-TOKEN"
+      WT.assertNoClientCookieExists "t3-a" c.cookieName
       WT.modifyClientCookies \_ -> ck0
-      WT.assertClientCookieExists "t3-b" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t3-b" c.cookieName
       sres1 <- WT.request WT.defaultRequest
       WT.assertBody (fromString (show (Just tok1))) sres1
-      WT.assertClientCookieExists "t3-c" "CSRF-TOKEN"
+      WT.assertClientCookieExists "t3-c" c.cookieName
       sres2 <- WT.request WT.defaultRequest
       WT.assertBody "Nothing" sres2
-      WT.assertClientCookieExists "t3-d" "CSRF-TOKEN"
-      WT.assertClientCookieValue "t3-e" "CSRF-TOKEN" ""
+      WT.assertClientCookieExists "t3-d" c.cookieName
+      WT.assertClientCookieValue "t3-e" c.cookieName ""
 
 app1
    :: WCC.Config
