@@ -1,16 +1,16 @@
-{ mkDerivation, base, bytestring, case-insensitive, cookie, crypton
-, http-types, lib, ram, time, wai, wai-extra
+{ mkDerivation, base, bytestring, case-insensitive, containers
+, cookie, crypton, http-types, lib, ram, time, wai, wai-extra
 }:
 mkDerivation {
   pname = "wai-csrf";
   version = "0.2";
   src = ./.;
   libraryHaskellDepends = [
-    base bytestring case-insensitive cookie crypton http-types ram time
-    wai
+    base bytestring case-insensitive cookie crypton ram time wai
   ];
   testHaskellDepends = [
-    base bytestring cookie http-types wai wai-extra
+    base bytestring case-insensitive containers cookie http-types wai
+    wai-extra
   ];
   homepage = "https://github.com/k0001/hs-wai-csrf";
   description = "Cross-site request forgery protection for WAI";
