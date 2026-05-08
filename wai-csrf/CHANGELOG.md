@@ -12,7 +12,6 @@
 
 * Add `middlewareReject`.
 
-* Add `tokenFromRequest`.
 
 # Version 0.1
 

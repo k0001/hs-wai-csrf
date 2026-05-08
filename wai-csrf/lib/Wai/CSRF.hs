@@ -1,12 +1,8 @@
 -- | This module exports tool to prevent cross-site request forgeries in
 -- "Network.Wai". Consider using it in combination with "Wai.CryptoCookie".
---
--- Mostly, you will want to us the 'tokenFromRequest' function, 'setCookie' and
--- 'expireCookie' functions.
 module Wai.CSRF
    ( Config (..)
    , defaultConfig
-   , tokenFromRequest
    , tokenFromRequestHeader
    , tokenFromRequestCookie
    , setCookie
@@ -151,8 +147,6 @@ defaultConfig =
 
 -- | Obtain the 'Token' from the 'Wai.Request' headers.
 --
--- You probably don't need this function. Use 'tokenFromRequest' instead.
---
 -- Warning: Do not rely on this 'Token' unless it is equal to the one returned
 -- by 'tokenFromRequestCookie'.
 tokenFromRequestHeader :: Config -> Wai.Request -> Maybe Token
@@ -163,21 +157,10 @@ tokenFromRequestHeader c = \r -> do
    n = CI.mk c.headerName
 
 -- | Obtain the 'Token' from the 'Wai.Request' cookies.
---
--- You probably don't need this function. Use 'tokenFromRequest' instead.
 tokenFromRequestCookie :: Config -> Wai.Request -> Maybe Token
 tokenFromRequestCookie c r = do
    [t64] <- pure $ lookupMany c.cookieName $ requestCookies r
    tokenFromBase64UU t64
-
--- | Obtain the 'Token' that came in through a cookie (see 'Config'\'s
--- @cookieName@), if any, as well as a 'Bool' which is 'True' if there is a
--- matching 'Token' that came in through a header (see 'Config'\'s
--- @headerName@).
-tokenFromRequest :: Config -> Wai.Request -> Maybe (Token, Bool)
-tokenFromRequest c = \req -> do
-   ct <- tokenFromRequestCookie c req
-   pure (ct, Just ct == tokenFromRequestHeader c req)
 
 -- | Construct a 'C.SetCookie' to set the CSRF 'Token'.
 --
