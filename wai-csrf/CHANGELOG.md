@@ -8,6 +8,10 @@
 
 * Remove the `reject` field from `Config`.
 
+* Remove `middleware`.
+
+* Add `middlewareReject`.
+
 * Add `tokenFromRequest`.
 
 # Version 0.1

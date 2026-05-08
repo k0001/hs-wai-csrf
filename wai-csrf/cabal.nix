@@ -6,7 +6,8 @@ mkDerivation {
   version = "0.2";
   src = ./.;
   libraryHaskellDepends = [
-    base bytestring case-insensitive cookie crypton ram time wai
+    base bytestring case-insensitive cookie crypton http-types ram time
+    wai
   ];
   testHaskellDepends = [
     base bytestring case-insensitive containers cookie http-types wai
@@ -14,5 +15,5 @@ mkDerivation {
   ];
   homepage = "https://github.com/k0001/hs-wai-csrf";
   description = "Cross-site request forgery protection for WAI";
-  license = lib.licenses.asl20;
+  license = lib.licensesSpdx."Apache-2.0";
 }

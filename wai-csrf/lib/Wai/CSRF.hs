@@ -11,7 +11,7 @@ module Wai.CSRF
    , tokenFromRequestCookie
    , setCookie
    , expireCookie
-   , middleware
+   , middlewareReject
 
     -- * Token
    , Token (..)
@@ -34,6 +34,7 @@ import Data.ByteArray.Sized qualified as BAS
 import Data.ByteString qualified as B
 import Data.CaseInsensitive qualified as CI
 import Data.Time.Clock.POSIX qualified as Time
+import Network.HTTP.Types qualified as H
 import Network.Wai qualified as Wai
 import Web.Cookie qualified as C
 
@@ -130,16 +131,10 @@ unmaskToken = snd . fromMaskedToken
 
 --------------------------------------------------------------------------------
 
--- | Config common to 'middleware', 'tokenFromRequestHeader' and
--- 'tokenFromRequestCookie'.
---
--- Consider using 'defaultConfig' and updating desired fields only.
+-- | Consider using 'defaultConfig' and updating desired fields only.
 data Config = Config
    { cookieName :: B.ByteString
-   -- ^ Used by 'tokenFromRequestCookie', 'setCookie', 'expireCookie' and
-   -- 'middleware'.
    , headerName :: B.ByteString
-   -- ^ Used by 'tokenFromRequestHeader' and 'middleware'.
    }
 
 -- | Default CSRF settings.
@@ -229,29 +224,38 @@ expireCookie c =
       , C.setCookieSecure = True
       }
 
--- | Construct a 'Wai.Middleware' (almost) that passes the result
--- of 'tokenFromRequest' to an 'Wai.Application'.
+-- | Rejects the request with @403 Forbidden@, except in these situations:
 --
--- Note: Most often, you'll end up wanting to use 'tokenFromRequest'.
+-- * When there is no 'tokenFromRequestCookie'.
+--
+-- * When there is a 'tokenFromRequestCookie', there is no
+-- 'tokenFromRequestHeader', and the request method is @GET@, @HEAD@,
+-- @OPTIONS@, @TRACE@.
+--
+-- * When there is a 'tokenFromRequestCookie' and a matching
+-- 'tokenFromRequestHeader'.
 --
 -- Important: This doesn't set any cookie. You must explicitly add
 -- 'setCookie' to a 'Wai.Response' yourself.
-middleware
-   :: Config
-   -> (Maybe Token -> Wai.Application)
-   -- ^ Takes the 'Token' that came in through a cookie (see 'Config'\'s
-   -- @cookieName@), if any, if there is also a matching 'Token' that came in
-   -- through a header (see 'Config'\'s @headerName@).
-   --
-   -- For any logic more complicated than this, use 'tokenFromRequest'.
-   --
-   -- Notice that the @'Maybe' ('Token', 'Bool')@ is not evaluated by this
-   -- 'middleware' function, so unless you force its evaluation, using
-   -- 'middleware' is essentially free.
-   -> Wai.Application
-middleware c fapp req = flip fapp req $ case tokenFromRequest c req of
-   Just (tok, True) -> Just tok
-   _ -> Nothing
+middlewareReject :: Config -> Wai.Middleware
+middlewareReject c = \app -> \req k -> case (fytc req, fyth req) of
+   (Nothing, _) -> app req k
+   (Just _, Nothing) | elem (Wai.requestMethod req) safeMethods -> app req k
+   (Just tc, Just th) | tc == th -> app req k
+   _ -> k response403
+  where
+   fytc = tokenFromRequestCookie c
+   fyth = tokenFromRequestHeader c
+
+safeMethods :: [H.Method]
+safeMethods = [H.methodGet, H.methodHead, H.methodOptions, H.methodTrace]
+
+response403 :: Wai.Response
+response403 =
+   Wai.responseLBS
+      H.status403
+      [("Content-Type", "text/plain;charset=utf-8")]
+      "403 Forbidden"
 
 --------------------------------------------------------------------------------
 
