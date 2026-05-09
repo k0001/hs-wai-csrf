@@ -38,6 +38,7 @@ library
   exposed-modules:
     Wai.CSRF
   build-depends:
+    aeson,
     bytestring,
     case-insensitive,
     cookie,
@@ -45,6 +46,7 @@ library
     http-types,
     ram,
     time,
+    text,
     wai,
 
 test-suite test

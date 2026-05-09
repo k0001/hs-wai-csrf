@@ -12,6 +12,8 @@
 
 * Add `middlewareReject`.
 
+* Add `ToJSON` and `FromJSON` instances for `Token` and `MaskedToken`.
+
 
 # Version 0.1
 

@@ -1,13 +1,14 @@
-{ mkDerivation, base, bytestring, case-insensitive, containers
-, cookie, crypton, http-types, lib, ram, time, wai, wai-extra
+{ mkDerivation, aeson, base, bytestring, case-insensitive
+, containers, cookie, crypton, http-types, lib, ram, text, time
+, wai, wai-extra
 }:
 mkDerivation {
   pname = "wai-csrf";
   version = "0.2";
   src = ./.;
   libraryHaskellDepends = [
-    base bytestring case-insensitive cookie crypton http-types ram time
-    wai
+    aeson base bytestring case-insensitive cookie crypton http-types
+    ram text time wai
   ];
   testHaskellDepends = [
     base bytestring case-insensitive containers cookie http-types wai

@@ -23,12 +23,15 @@ module Wai.CSRF
    , unmaskToken
    ) where
 
+import Control.Monad
 import Crypto.Random qualified as C
+import Data.Aeson qualified as Ae
 import Data.ByteArray qualified as BA
 import Data.ByteArray.Encoding qualified as BA
 import Data.ByteArray.Sized qualified as BAS
 import Data.ByteString qualified as B
 import Data.CaseInsensitive qualified as CI
+import Data.Text.Encoding qualified as T
 import Data.Time.Clock.POSIX qualified as Time
 import Network.HTTP.Types qualified as H
 import Network.Wai qualified as Wai
@@ -67,6 +70,17 @@ tokenFromBase64UU b =
    case BA.convertFromBase BA.Base64URLUnpadded b of
       Right (x :: BA.Bytes) -> Token <$> BAS.fromByteArrayAccess x
       _ -> Nothing
+
+-- | Uses 'tokenToBase64UU'.
+instance Ae.ToJSON Token where
+   toJSON = Ae.toJSON . T.decodeUtf8 . tokenToBase64UU
+
+-- | Uses 'tokenFromBase64UU'.
+instance Ae.FromJSON Token where
+   parseJSON =
+      Ae.withText
+         "Wai.CSRF.Token"
+         (maybe mzero pure . tokenFromBase64UU . T.encodeUtf8)
 
 --------------------------------------------------------------------------------
 
@@ -124,6 +138,17 @@ randomMaskToken t = flip toMaskedToken t <$> randomMask
 -- the same output @tok@.
 unmaskToken :: MaskedToken -> Token
 unmaskToken = snd . fromMaskedToken
+
+-- | Uses 'maskedTokenToBase64UU'.
+instance Ae.ToJSON MaskedToken where
+   toJSON = Ae.toJSON . T.decodeUtf8 . maskedTokenToBase64UU
+
+-- | Uses 'maskedTokenFromBase64UU'.
+instance Ae.FromJSON MaskedToken where
+   parseJSON =
+      Ae.withText
+         "Wai.CSRF.MaskedToken"
+         (maybe mzero pure . maskedTokenFromBase64UU . T.encodeUtf8)
 
 --------------------------------------------------------------------------------
 
